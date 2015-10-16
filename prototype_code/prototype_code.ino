@@ -1,3 +1,4 @@
+#include <SPI.h>
 #include <SD.h>
 #include <Adafruit_GPS.h>
 #include <SoftwareSerial.h>
@@ -11,7 +12,8 @@ SoftwareSerial mySerial(3, 2);
 //Attach GPS to SoftwareSerial
 Adafruit_GPS GPS(&mySerial);
 
-boolean showRawGPSData = false;
+boolean showRawGPSData;
+boolean usingInterrupt;
 
 void setup() {
   Serial.begin(115200);
@@ -21,7 +23,29 @@ void setup() {
   GPS.sendCommand(PGCMD_ANTENNA);
   delay(1000);
   mySerial.println(PMTK_Q_RELEASE);
-  showRawGPSData = true;
+  showRawGPSData = false;
+  useInterrupt(true);
+}
+
+SIGNAL(TIMER0_COMPA_vect) {
+  char c = GPS.read();
+#ifdef UDR0
+  if (showRawGPSData && usingInterrupt)
+    if (c) UDR0 = c;
+#endif
+}
+
+void useInterrupt(boolean v) {
+  if (v) {
+    //run "Compare A" function
+    OCR0A = 0xAF;
+    TIMSK0 |= _BV(OCIE0A);
+    usingInterrupt = true;
+  } else {
+    //do not call the interrupt function COMPA anymore
+    TIMSK0 &= ~_BV(OCIE0A);
+    usingInterrupt = false;
+  }
 }
 
 //tests the wireless connection to see if data can be transmitted
@@ -42,43 +66,43 @@ void writeDataToSD(String data) {
 }
 
 //transmit/write GPS data
-void transmitOrWriteGPSData(Adafruit_GPS gps) {
+void transmitOrWriteGPSData() {
   if (!canTransmitData()) {
     //start writing GPS data to SD cart
     //just prints to serial for now
-    writeDataToSD(String((int)gps.hour, DEC));
+    writeDataToSD(String((int)GPS.hour, DEC));
     writeDataToSD(String(':'));
-    writeDataToSD(String((int)gps.minute, DEC));
+    writeDataToSD(String((int)GPS.minute, DEC));
     writeDataToSD(String(':'));
-    writeDataToSD(String((int)gps.seconds, DEC));
+    writeDataToSD(String((int)GPS.seconds, DEC));
     writeDataToSD(String('.'));
-    writeDataToSD(String((int)gps.milliseconds, DEC));
+    writeDataToSD(String((int)GPS.milliseconds, DEC));
     writeDataToSD(String(','));
-    writeDataToSD(String(gps.day, DEC));
+    writeDataToSD(String(GPS.day, DEC));
     writeDataToSD(String('/'));
-    writeDataToSD(String(gps.month, DEC));
+    writeDataToSD(String(GPS.month, DEC));
     writeDataToSD("/20");
-    writeDataToSD(String(gps.year, DEC));
+    writeDataToSD(String(GPS.year, DEC));
     if (GPS.fix) {
-      writeDataToSD(String((long)gps.latitudeDegrees));
+      writeDataToSD(String((long)GPS.latitudeDegrees));
       writeDataToSD(String(','));
-      writeDataToSD(String((long)gps.longitudeDegrees));
+      writeDataToSD(String((long)GPS.longitudeDegrees));
       writeDataToSD(String(','));
-      writeDataToSD(String((long)gps.speed));
+      writeDataToSD(String((long)GPS.speed));
       writeDataToSD(String(','));
-      writeDataToSD(String((long)gps.angle));
+      writeDataToSD(String((long)GPS.angle));
       writeDataToSD(String(','));
-      writeDataToSD(String((long)gps.altitude));
+      writeDataToSD(String((long)GPS.altitude));
     }
     writeDataToSD(String('\n'));
   } else {
     //transmit not implemented yet
-  }
+  } 
 }
 
 uint32_t timer = millis();
 void loop() {
-  if (showRawGPSData) {
+  if (showRawGPSData && !usingInterrupt) {
     char c = GPS.read();
     if (c) Serial.print(c);
   }
@@ -90,9 +114,9 @@ void loop() {
 
   if (timer > millis()) timer = millis();
   
-  if (millis() - timer > 2000) {
+  if (millis() - timer > 1000) {
     timer = millis();
-    transmitOrWriteGPSData(GPS);
+    transmitOrWriteGPSData();
   }
 }
 
