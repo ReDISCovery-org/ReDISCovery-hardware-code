@@ -3,9 +3,20 @@
 #include <Adafruit_GPS.h>
 #include <SoftwareSerial.h>
 
-//Set up SoftwareSerial
-//Attach TX to Digital pin 3
-//Attach RX to Digital pin 2
+//GPS WIRING (UNO)
+//TX - pin 3
+//RX - pin 2
+//Vin - 5V
+//GND - GND
+
+//SD CARD WIRING (UNO)
+//MOSI - pin 11
+//MISO - pin 12
+//CLK - pin 13
+//CS - pin 4
+//3.3V - 3.3V
+//GND - GND
+
 
 SoftwareSerial mySerial(3, 2);
 
@@ -97,6 +108,13 @@ void writeDataToSD(String data) {
   Serial.println("Wrote: ");
   Serial.println(data);
   Serial.println("to SD card successfully.");
+}
+
+//reads all data from SD card
+void readDataFromSD() {
+  while (myFile.available()) {
+    Serial.write(myFile.read());
+  }
 }
 
 //transmit/write GPS data
