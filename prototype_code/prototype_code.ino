@@ -14,6 +14,8 @@ Adafruit_GPS GPS(&mySerial);
 
 boolean showRawGPSData;
 boolean usingInterrupt;
+boolean isSDInitialized;
+File myFile;
 
 void setup() {
   Serial.begin(115200);
@@ -25,6 +27,8 @@ void setup() {
   mySerial.println(PMTK_Q_RELEASE);
   showRawGPSData = false;
   useInterrupt(true);
+  pinMode(10, OUTPUT); //Set pin 10 to output so the SD library will work
+  initializeSD();
 }
 
 SIGNAL(TIMER0_COMPA_vect) {
@@ -59,42 +63,80 @@ void transmitData(String data) {
   
 }
 
+//initializes the SD card
+//run in the setup function
+void initializeSD() {
+  Serial.print("Initializing SD card...");
+  if (!SD.begin(4)) {
+    Serial.println("SD Initialization Failed!");
+    isSDInitialized = false;
+    return;
+  }
+  Serial.println("SD Initialized Successfully.");
+  isSDInitialized = true;
+}
+
+//open the file on the SD card
+boolean openSDFile() {
+  myFile = SD.open("test.txt", FILE_WRITE);
+  if (myFile) {
+    return true;
+  }
+  return false;
+}
+
+//closes the file on the SD card
+void closeSDFile() {
+  myFile.close();
+}
+
 //writes data to an SD card
 //just prints to the Serial monitor for now
 void writeDataToSD(String data) {
-  Serial.print(data);
+  myFile.println(data);
+  Serial.println("Wrote: ");
+  Serial.println(data);
+  Serial.println("to SD card successfully.");
 }
 
 //transmit/write GPS data
 void transmitOrWriteGPSData() {
   if (!canTransmitData()) {
-    //start writing GPS data to SD cart
-    //just prints to serial for now
-    writeDataToSD(String((int)GPS.hour, DEC));
-    writeDataToSD(String(':'));
-    writeDataToSD(String((int)GPS.minute, DEC));
-    writeDataToSD(String(':'));
-    writeDataToSD(String((int)GPS.seconds, DEC));
-    writeDataToSD(String('.'));
-    writeDataToSD(String((int)GPS.milliseconds, DEC));
-    writeDataToSD(String(','));
-    writeDataToSD(String(GPS.day, DEC));
-    writeDataToSD(String('/'));
-    writeDataToSD(String(GPS.month, DEC));
-    writeDataToSD("/20");
-    writeDataToSD(String(GPS.year, DEC));
-    if (GPS.fix) {
-      writeDataToSD(String((long)GPS.latitudeDegrees));
+    //open SD file and test if it is open
+    if (openSDFile()) {
+      //start writing GPS data to SD cart
+      //just prints to serial for now
+      writeDataToSD(String((int)GPS.hour, DEC));
+      writeDataToSD(String(':'));
+      writeDataToSD(String((int)GPS.minute, DEC));
+      writeDataToSD(String(':'));
+      writeDataToSD(String((int)GPS.seconds, DEC));
+      writeDataToSD(String('.'));
+      writeDataToSD(String((int)GPS.milliseconds, DEC));
       writeDataToSD(String(','));
-      writeDataToSD(String((long)GPS.longitudeDegrees));
-      writeDataToSD(String(','));
-      writeDataToSD(String((long)GPS.speed));
-      writeDataToSD(String(','));
-      writeDataToSD(String((long)GPS.angle));
-      writeDataToSD(String(','));
-      writeDataToSD(String((long)GPS.altitude));
+      writeDataToSD(String(GPS.day, DEC));
+      writeDataToSD(String('/'));
+      writeDataToSD(String(GPS.month, DEC));
+      writeDataToSD("/20");
+      writeDataToSD(String(GPS.year, DEC));
+      if (GPS.fix) {
+        writeDataToSD(String((long)GPS.latitudeDegrees));
+        writeDataToSD(String(','));
+        writeDataToSD(String((long)GPS.longitudeDegrees));
+        writeDataToSD(String(','));
+        writeDataToSD(String((long)GPS.speed));
+        writeDataToSD(String(','));
+        writeDataToSD(String((long)GPS.angle));
+        writeDataToSD(String(','));
+        writeDataToSD(String((long)GPS.altitude));
+      }
+      writeDataToSD(String('\n'));
+      //close the SD file
+      closeSDFile();
+    } else {
+      //could not open SD file
+      Serial.println("Error opening the SD file!");
     }
-    writeDataToSD(String('\n'));
   } else {
     //transmit not implemented yet
   } 
@@ -119,6 +161,4 @@ void loop() {
     transmitOrWriteGPSData();
   }
 }
-
-
 
