@@ -27,6 +27,7 @@ boolean showRawGPSData;
 boolean usingInterrupt;
 boolean isSDInitialized;
 File myFile;
+int piezoPin = 9;
 
 void setup() {
   Serial.begin(115200);
@@ -38,6 +39,7 @@ void setup() {
   mySerial.println(PMTK_Q_RELEASE);
   showRawGPSData = false;
   useInterrupt(true);
+  pinMode(piezoPin, OUTPUT); //Set pin piezo speaker pin to output 
   pinMode(10, OUTPUT); //Set pin 10 to output so the SD library will work
   initializeSD();
 }
@@ -77,13 +79,13 @@ void transmitData(String data) {
 //initializes the SD card
 //run in the setup function
 void initializeSD() {
-  Serial.print("Initializing SD card...");
+  Serial.print(F("Initializing SD card..."));
   if (!SD.begin(4)) {
-    Serial.println("SD Initialization Failed!");
+    Serial.println(F("SD Initialization Failed!"));
     isSDInitialized = false;
     return;
   }
-  Serial.println("SD Initialized Successfully.");
+  Serial.println(F("SD Initialized Successfully."));
   isSDInitialized = true;
 }
 
@@ -105,9 +107,9 @@ void closeSDFile() {
 //just prints to the Serial monitor for now
 void writeDataToSD(String data) {
   myFile.println(data);
-  Serial.println("Wrote: ");
+  Serial.println(F("Wrote: "));
   Serial.println(data);
-  Serial.println("to SD card successfully.");
+  Serial.println(F("to SD card successfully."));
 }
 
 //reads all data from SD card
@@ -115,6 +117,13 @@ void readDataFromSD() {
   while (myFile.available()) {
     Serial.write(myFile.read());
   }
+}
+
+void testSDCard() {
+  if (openSDFile()) {
+    writeDataToSD("hello");
+  }
+  closeSDFile();
 }
 
 //transmit/write GPS data
@@ -153,11 +162,15 @@ void transmitOrWriteGPSData() {
       closeSDFile();
     } else {
       //could not open SD file
-      Serial.println("Error opening the SD file!");
+      Serial.println(F("Error opening the SD file!"));
     }
   } else {
     //transmit not implemented yet
   } 
+}
+
+void produceTone() {
+  
 }
 
 uint32_t timer = millis();
@@ -178,5 +191,6 @@ void loop() {
     timer = millis();
     transmitOrWriteGPSData();
   }
+  testSDCard();
 }
 
