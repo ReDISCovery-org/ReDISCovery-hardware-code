@@ -2,6 +2,12 @@
 #include <SD.h>
 #include <Adafruit_GPS.h>
 #include <SoftwareSerial.h>
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_LSM303_U.h>
+#include <Adafruit_BMP085_U.h>
+#include <Adafruit_L3GD20_U.h>
+#include <Adafruit_10DOF.h>
 
 //GPS WIRING (UNO)
 //TX - pin 3
@@ -17,6 +23,12 @@
 //3.3V - 3.3V
 //GND - GND
 
+//10 DOF WIRING (UNO)
+//SDA - A4
+//SCL - A5
+//Vin - 5V
+//GND - GND
+
 
 SoftwareSerial mySerial(3, 2);
 
@@ -25,9 +37,13 @@ Adafruit_GPS GPS(&mySerial);
 
 boolean showRawGPSData;
 boolean usingInterrupt;
-boolean isSDInitialized;
-File myFile;
-int piezoPin = 9;
+
+
+//Assign a unique ID to the sensors
+Adafruit_10DOF                dof   = Adafruit_10DOF();
+Adafruit_LSM303_Accel_Unified accel = Adafruit_LSM303_Accel_Unified(30301);
+float pitch;
+float roll;
 
 void setup() {
   Serial.begin(115200);
@@ -39,9 +55,9 @@ void setup() {
   mySerial.println(PMTK_Q_RELEASE);
   showRawGPSData = false;
   useInterrupt(true);
-  pinMode(piezoPin, OUTPUT); //Set pin piezo speaker pin to output 
   pinMode(10, OUTPUT); //Set pin 10 to output so the SD library will work
   initializeSD();
+  initSensors();
 }
 
 SIGNAL(TIMER0_COMPA_vect) {
@@ -65,6 +81,29 @@ void useInterrupt(boolean v) {
   }
 }
 
+//initialize 10 DoF sensors
+void initSensors() {
+  //just initialize the accelerometer for now
+  if (!accel.begin()) {
+    Serial.println(F("No LSM303 Detected."));
+    while(1);
+  }
+  //set values for pitch and roll to 0
+  pitch = 0;
+  roll = 0;
+}
+
+//update roll & pitch values 
+void updateRollPitch() {
+  sensors_event_t accel_event;
+  sensors_vec_t orientation;
+  accel.getEvent(&accel_event);
+  if (dof.accelGetOrientation(&accel_event, &orientation)) {
+    roll = orientation.roll;
+    pitch = orientation.pitch;
+  }
+}
+
 //tests the wireless connection to see if data can be transmitted
 //set to false for now
 boolean canTransmitData() {
@@ -73,7 +112,7 @@ boolean canTransmitData() {
 
 //wirelessly transmits data to an Android phone to be saved
 void transmitData(String data) {
-  
+  //not implemented yet
 }
 
 //initializes the SD card
@@ -82,84 +121,52 @@ void initializeSD() {
   Serial.print(F("Initializing SD card..."));
   if (!SD.begin(4)) {
     Serial.println(F("SD Initialization Failed!"));
-    isSDInitialized = false;
     return;
   }
   Serial.println(F("SD Initialized Successfully."));
-  isSDInitialized = true;
 }
 
-//open the file on the SD card
-boolean openSDFile() {
-  myFile = SD.open("test.txt", FILE_WRITE);
-  if (myFile) {
-    return true;
-  }
-  return false;
-}
 
-//closes the file on the SD card
-void closeSDFile() {
-  myFile.close();
-}
 
-//writes data to an SD card
-//just prints to the Serial monitor for now
-void writeDataToSD(String data) {
-  myFile.println(data);
-  Serial.println(F("Wrote: "));
-  Serial.println(data);
-  Serial.println(F("to SD card successfully."));
-}
-
-//reads all data from SD card
-void readDataFromSD() {
-  while (myFile.available()) {
-    Serial.write(myFile.read());
-  }
-}
-
-void testSDCard() {
-  if (openSDFile()) {
-    writeDataToSD("hello");
-  }
-  closeSDFile();
-}
-
-//transmit/write GPS data
-void transmitOrWriteGPSData() {
+//transmit/write all data
+void transmitOrWriteData() {
   if (!canTransmitData()) {
     //open SD file and test if it is open
-    if (openSDFile()) {
+    boolean myFile = true;
+    if (myFile) {
       //start writing GPS data to SD cart
       //just prints to serial for now
-      writeDataToSD(String((int)GPS.hour, DEC));
-      writeDataToSD(String(':'));
-      writeDataToSD(String((int)GPS.minute, DEC));
-      writeDataToSD(String(':'));
-      writeDataToSD(String((int)GPS.seconds, DEC));
-      writeDataToSD(String('.'));
-      writeDataToSD(String((int)GPS.milliseconds, DEC));
-      writeDataToSD(String(','));
-      writeDataToSD(String(GPS.day, DEC));
-      writeDataToSD(String('/'));
-      writeDataToSD(String(GPS.month, DEC));
-      writeDataToSD("/20");
-      writeDataToSD(String(GPS.year, DEC));
+      Serial.print(String((int)GPS.hour, DEC));
+      Serial.print(String(':'));
+      Serial.print(String((int)GPS.minute, DEC));
+      Serial.print(String(':'));
+      Serial.print(String((int)GPS.seconds, DEC));
+      Serial.print(String('.'));
+      Serial.print(String((int)GPS.milliseconds, DEC));
+      Serial.print(String(','));
+      Serial.print(String(GPS.day, DEC));
+      Serial.print(String('/'));
+      Serial.print(String(GPS.month, DEC));
+      Serial.print("/20");
+      Serial.print(String(GPS.year, DEC));
+      Serial.print(String(','));
       if (GPS.fix) {
-        writeDataToSD(String((long)GPS.latitudeDegrees));
-        writeDataToSD(String(','));
-        writeDataToSD(String((long)GPS.longitudeDegrees));
-        writeDataToSD(String(','));
-        writeDataToSD(String((long)GPS.speed));
-        writeDataToSD(String(','));
-        writeDataToSD(String((long)GPS.angle));
-        writeDataToSD(String(','));
-        writeDataToSD(String((long)GPS.altitude));
+        Serial.print(String((long)GPS.latitudeDegrees));
+        Serial.print(String(','));
+        Serial.print(String((long)GPS.longitudeDegrees));
+        Serial.print(String(','));
+        Serial.print(String((long)GPS.speed));
+        Serial.print(String(','));
+        Serial.print(String((long)GPS.angle));
+        Serial.print(String(','));
+        Serial.print(String((long)GPS.altitude));
       }
-      writeDataToSD(String('\n'));
+      Serial.print(String(pitch, 2));
+      Serial.print(String(','));
+      Serial.print(String(roll, 2));
+      Serial.print(String('\n'));
       //close the SD file
-      closeSDFile();
+      //myFile.close();
     } else {
       //could not open SD file
       Serial.println(F("Error opening the SD file!"));
@@ -169,28 +176,25 @@ void transmitOrWriteGPSData() {
   } 
 }
 
-void produceTone() {
-  
-}
-
 uint32_t timer = millis();
 void loop() {
   if (showRawGPSData && !usingInterrupt) {
     char c = GPS.read();
     if (c) Serial.print(c);
   }
-  
+
+  //get current GPS values
   if (GPS.newNMEAreceived()) {
     if (!GPS.parse(GPS.lastNMEA()))
       return;
   }
 
+  //set timer, write data every second
   if (timer > millis()) timer = millis();
-  
   if (millis() - timer > 1000) {
     timer = millis();
-    transmitOrWriteGPSData();
+    updateRollPitch();
+    transmitOrWriteData();
   }
-  testSDCard();
 }
 
