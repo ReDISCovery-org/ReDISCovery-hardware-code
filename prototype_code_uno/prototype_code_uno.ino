@@ -134,7 +134,7 @@ void transmitOrWriteData() {
     //open SD file and test if it is open
     boolean myFile = true;
     if (myFile) {
-      //start writing GPS data to SD cart
+      //start writing GPS data to SD card
       //just prints to serial for now
       Serial.print(String((int)GPS.hour, DEC));
       Serial.print(String(':'));
