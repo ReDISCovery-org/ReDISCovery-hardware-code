@@ -10,7 +10,7 @@
 File myFile;
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   SPI.setMOSI(SDCARD_MOSI_PIN);
   SPI.setMISO(SDCARD_MISO_PIN);
   SPI.setSCK(SDCARD_SCK_PIN);
