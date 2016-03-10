@@ -8,6 +8,7 @@
 #include <Adafruit_10DOF.h>
 #include <SPI.h>
 #include <SD.h>
+#include <ArduinoJson.h>
 
 /* Assign a unique ID to the 10 DoF sensors */
 Adafruit_10DOF                dof   = Adafruit_10DOF();
@@ -21,6 +22,9 @@ float roll, pitch, heading;
 /* Assign serial interface to the GPS */
 HardwareSerial gpsSerial = Serial1;
 Adafruit_GPS GPS(&gpsSerial);
+
+/*Serial interface for the ESP8266*/
+HardwareSerial espSerial = Serial2;
 
 /* Set GPSECHO to 'false' to turn off echoing the GPS data to the Serial console
  Set to 'true' if you want to debug and listen to the raw GPS sentences.*/
@@ -41,6 +45,7 @@ void setup()
   initializeGPS();
   initializeIMU();
   initializeSDCard();
+  initializeESP();
 }
 
 void initializeIMU() {
@@ -88,6 +93,10 @@ void initializeSDCard() {
   Serial.println("SD card initialized successfully.");
 }
 
+void initializeESP() {
+  espSerial.begin(9600);
+}
+
 void setIMUReadings() {
   sensors_event_t accel_event;  
   sensors_event_t mag_event;
@@ -111,55 +120,64 @@ boolean canTransmitData()
 {
   return false;
 }
-void transmitOrWriteData() {
-  if (!canTransmitData()) {
-    //open SD file and test if it is open
+
+void transmitOrWriteGPSData() {
+  //build the JSON packet
+  StaticJsonBuffer<200> jsonBuffer;
+  JsonObject& root = jsonBuffer.createObject();
+  root["sensor"] = "gps";
+  String gpsTime = String((int)GPS.hour, DEC) + ":" + String((int)GPS.minute, DEC) + ":" 
+    + String((int)GPS.seconds, DEC) + "." + String((int)GPS.milliseconds, DEC);
+  root["time"] = gpsTime;
+  String date = String((int)GPS.day, DEC) + "/" + String((int)GPS.month, DEC) + "/20" 
+    + String((int)GPS.year, DEC);
+  root["date"] = date;
+  if (GPS.fix) {
+    JsonArray& coords = root.createNestedArray("coords");
+    coords.add(double_with_n_digits(GPS.latitudeDegrees, 6));
+    coords.add(double_with_n_digits(GPS.longitudeDegrees, 6));
+    root["speed"] = GPS.speed;
+    root["altitude"] = GPS.altitude;
+  } else {
+    JsonArray& coords = root.createNestedArray("coords");
+    coords.add(0);
+    coords.add(0);
+    root["speed"] = 0;
+    root["altitude"] = 0;
+  }
+
+  //transmit if in range or write to SD card
+  if (canTransmitData()) {
+    root.printTo(espSerial);
+  } else {
     dataFile = SD.open("DATA00.txt", FILE_WRITE);
     if (dataFile) {
-      //start writing GPS data to SD card
-      //just prints to serial for now
-      dataFile.print(String((int)GPS.hour, DEC));
-      dataFile.print(String(':'));
-      dataFile.print(String((int)GPS.minute, DEC));
-      dataFile.print(String(':'));
-      dataFile.print(String((int)GPS.seconds, DEC));
-      dataFile.print(String('.'));
-      dataFile.print(String((int)GPS.milliseconds, DEC));
-      dataFile.print(String(','));
-      dataFile.print(String(GPS.day, DEC));
-      dataFile.print(String('/'));
-      dataFile.print(String(GPS.month, DEC));
-      dataFile.print("/20");
-      dataFile.print(String(GPS.year, DEC));
-      dataFile.print(String(','));
-      if (GPS.fix) {
-        dataFile.print(String(GPS.latitudeDegrees, 4));
-        dataFile.print(String(','));
-        dataFile.print(String(GPS.longitudeDegrees, 4));
-        dataFile.print(String(','));
-        dataFile.print(String(GPS.speed, 2));
-        dataFile.print(String(','));
-        dataFile.print(String(GPS.angle, 2));
-        dataFile.print(String(','));
-        dataFile.print(String(GPS.altitude, 2));
-        dataFile.print(String(','));
-      }
-      dataFile.print(String(pitch, 2));
-      dataFile.print(String(','));
-      dataFile.print(String(roll, 2));
-      dataFile.print(String(','));
-      dataFile.print(String(heading, 2));
-      dataFile.print(String('\n'));
-      //close the SD file
+      root.printTo(dataFile);
       dataFile.close();
-      Serial.println("Wrote data successfully");
-    } else {
-      //could not open SD file
-      Serial.println(F("Error opening the SD file!"));
     }
+  }
+}
+
+void transmitOrWriteIMUData() {
+  //build the JSON packet
+  StaticJsonBuffer<200> jsonBuffer;
+  JsonObject& root = jsonBuffer.createObject();
+  root["sensor"] = "imu";
+  root["time"] = millis();
+  root["pitch"] = pitch;
+  root["roll"] = roll;
+  root["heading"] = heading;
+
+  //transmit if in range or write to SD card
+  if (canTransmitData()) {
+    root.printTo(espSerial);  
   } else {
-    //transmit not implemented yet
-  } 
+    dataFile = SD.open("DATA00.txt", FILE_WRITE);
+    if (dataFile) {
+      root.printTo(dataFile);
+      dataFile.close();
+    }
+  }
 }
 
 uint32_t timer = millis();
@@ -178,10 +196,11 @@ void loop()
   // if millis() or timer wraps around, we'll just reset it
   if (timer > millis())  timer = millis();
 
-  // transmit every half second
+  // transmit GPS data every second
   if (millis() - timer > 1000) { 
     timer = millis(); // reset the timer
-    setIMUReadings();
-    transmitOrWriteData();
+    transmitOrWriteGPSData();
   }
+  setIMUReadings();
+  transmitOrWriteIMUData();
 }
