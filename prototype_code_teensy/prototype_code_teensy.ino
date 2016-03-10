@@ -153,7 +153,11 @@ void transmitOrWriteGPSData() {
     dataFile = SD.open("DATA00.txt", FILE_WRITE);
     if (dataFile) {
       root.printTo(dataFile);
+      dataFile.print("\n");
       dataFile.close();
+      Serial.println("Wrote GPS data successfully");
+    } else {
+      root.prettyPrintTo(Serial);
     }
   }
 }
@@ -175,7 +179,11 @@ void transmitOrWriteIMUData() {
     dataFile = SD.open("DATA00.txt", FILE_WRITE);
     if (dataFile) {
       root.printTo(dataFile);
+      dataFile.print("\n");
       dataFile.close();
+      Serial.println("Wrote IMU data successfully.");
+    } else {
+      root.prettyPrintTo(Serial);
     }
   }
 }
