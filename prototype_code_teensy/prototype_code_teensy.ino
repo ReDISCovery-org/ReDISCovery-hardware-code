@@ -19,6 +19,17 @@ Adafruit_BMP085_Unified       bmp   = Adafruit_BMP085_Unified(18001);
 float seaLevelPressure = SENSORS_PRESSURE_SEALEVELHPA;
 float roll, pitch, heading;
 
+//window of roll, pitch, and heading values
+int WINDOW_SIZE = 30;
+float rollValues[WINDOW_SIZE];
+float pitchValues[WINDOW_SIZE];
+
+//threshold for roll, pitch, and heading variance
+float ROLL_THRESHOLD = 0;
+float PITCH_THRESHOLD = 0;
+float HEADING_THRESHOLD = 0;
+
+
 /* Assign serial interface to the GPS */
 HardwareSerial gpsSerial = Serial1;
 Adafruit_GPS GPS(&gpsSerial);
@@ -125,6 +136,29 @@ void setIMUReadings() {
   }
 }
 
+float calcVariance(float[] values, int numValues) {
+  if (numValues <= 0) 
+    return 0.0;
+  float sum = 0;
+  float sq_sum = 0;
+  for (int i = 0; i < numValues; i++) {
+    sum = sum + values[i];
+    sq_sum = sq_sum + values[i]*values[i];
+  }
+  float mean = sum / numValues;
+  return sq_sum / numValues - mean*mean;
+}
+
+bool isDiscStopped() {
+  float rollVariance = calcVariance(rollValues, WINDOW_SIZE);
+  float pitchVariance = calcVariance(pitchValues, WINDOW_SIZE);
+  float headingVariance = calcVariance(headingValues, WINDOW_SIZE);
+  if (rollVariance < ROLL_THRESHOLD && pitchVariance < PITCH_THRESHOLD && headingVariance < HEADING_THRESHOLD)
+    return true;
+  else 
+    return false;
+}
+
 boolean canTransmitData()
 {
   return false;
@@ -219,5 +253,6 @@ void loop()
     transmitOrWriteGPSData();
   }
   setIMUReadings();
+  isDiscStopped();
   transmitOrWriteIMUData();
 }
