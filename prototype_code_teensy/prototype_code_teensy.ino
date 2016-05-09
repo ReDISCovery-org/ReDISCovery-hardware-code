@@ -30,6 +30,9 @@ HardwareSerial espSerial = Serial2;
  Set to 'true' if you want to debug and listen to the raw GPS sentences.*/
 #define GPSECHO  false
 
+/*Debug mode*/
+#define DEBUG true
+
 /*Assign SD card pins*/
 #define SDCARD_CS_PIN   10
 #define SDCARD_MOSI_PIN  11
@@ -45,7 +48,7 @@ void setup()
   initializeGPS();
   initializeIMU();
   initializeSDCard();
-  initializeESP();
+  //initializeESP();
 }
 
 void initializeIMU() {
@@ -95,6 +98,13 @@ void initializeSDCard() {
 
 void initializeESP() {
   espSerial.begin(9600);
+  sendCommand("AT+RST\r\n",2000,DEBUG); // reset module
+  sendCommand("AT+CWMODE=1\r\n",1000,DEBUG); // configure as access point
+  sendCommand("AT+CWJAP=\"mySSID\",\"myPassword\"\r\n",3000,DEBUG);
+  delay(10000);
+  sendCommand("AT+CIFSR\r\n",1000,DEBUG); // get ip address
+  sendCommand("AT+CIPMUX=1\r\n",1000,DEBUG); // configure for multiple connections
+  sendCommand("AT+CIPSERVER=1,80\r\n",1000,DEBUG); // turn on server on port 80
 }
 
 void setIMUReadings() {
@@ -113,7 +123,6 @@ void setIMUReadings() {
     pitch = orientation.pitch;
     heading = orientation.heading;
   }
-  delay(100);
 }
 
 boolean canTransmitData()
@@ -148,7 +157,7 @@ void transmitOrWriteGPSData() {
 
   //transmit if in range or write to SD card
   if (canTransmitData()) {
-    root.printTo(espSerial);
+    
   } else {
     dataFile = SD.open("DATA00.txt", FILE_WRITE);
     if (dataFile) {
