@@ -55,7 +55,7 @@ void setup()
   initializeGPS();
   initializeIMU();
   initializeSDCard();
-  //initializeESP();
+  initializeESP();
 
   //set most recent
   mostRecentLatitudeReading = 0;
@@ -235,6 +235,7 @@ void checkMessages() {
   
   if(esp8266.available() && isDiscStopped()) // check if the esp is sending a message 
   {
+    Serial.println("Sending data to phone");
     if(esp8266.find("+IPD,"))
     {
      delay(1000); // wait for the serial buffer to fill up (read all the serial data)
@@ -331,7 +332,7 @@ void writeGPSData() {
     root.printTo(dataFile);
     dataFile.print("\n");
     dataFile.close();
-    Serial.println("Wrote GPS data successfully to store.");
+    //Serial.println("Wrote GPS data successfully to store.");
   } else {
     Serial.println("Failed to write GPS data to store.");
   }
@@ -351,7 +352,7 @@ void writeIMUData() {
     root.printTo(dataFile);
     dataFile.print("\n");
     dataFile.close();
-    Serial.println("Wrote IMU data successfully to store.");
+    //Serial.println("Wrote IMU data successfully to store.");
   } else {
     Serial.println("Failed to write IMU data to store.");
   }
@@ -372,7 +373,7 @@ void writeDataToCache() {
       root.printTo(dataFile);
       dataFile.print("\n");
       dataFile.close();
-      Serial.println("Wrote data successfully to cache.");
+      //Serial.println("Wrote data successfully to cache.");
     } else {
       Serial.println("Failed to write write data to cache.");
     }
@@ -405,4 +406,5 @@ void loop()
   setIMUReadings();
   writeIMUData();
   writeDataToCache();
+  checkMessages();
 }
