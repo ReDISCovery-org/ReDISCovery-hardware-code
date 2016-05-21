@@ -18,23 +18,8 @@ Adafruit_BMP085_Unified       bmp   = Adafruit_BMP085_Unified(18001);
 
 float seaLevelPressure = SENSORS_PRESSURE_SEALEVELHPA;
 float roll, pitch, heading;
-
-//window of roll, pitch, and heading values
-#define WINDOW_SIZE 30
-float rollValues[WINDOW_SIZE];
-float pitchValues[WINDOW_SIZE];
-float headingValues[WINDOW_SIZE];
-int valuesStart = 0, valuesEnd = 0;
-
-//threshold for roll, pitch, and heading variance
-float ROLL_THRESHOLD = 0.2;
-float PITCH_THRESHOLD = 0.2;
-float HEADING_THRESHOLD = 0.2;
-
-//variables used for computing the moving average and variance
-float rollMovingAverage, rollVariance;
-float pitchMovingAverage, pitchVariance;
-float headingMovingAverage, headingVariance;
+float accelX, accelY, accelZ;
+float ACCEL_THRESHOLD = 1.0;
 
 /* Assign serial interface to the GPS */
 HardwareSerial gpsSerial = Serial1;
@@ -88,35 +73,6 @@ void initializeIMU() {
     Serial.print("Ooops, no BMP085 detected ... Check your wiring or I2C ADDR!");
     while(1);
   }
-
-  //fill values 
-  for (int i = 0; i < WINDOW_SIZE; i++) {
-    setIMUReadings();
-    rollValues[i] = roll;
-    pitchValues[i] = pitch;
-    headingValues[i] = heading;
-    valuesEnd++;
-  }
-
-  //set initial average and variance
-  rollMovingAverage = calcInitialAverage(rollValues);
-  pitchMovingAverage = calcInitialAverage(pitchValues);
-  headingMovingAverage = calcInitialAverage(headingValues);
-  rollVariance = calcInitialVariance(rollValues, rollMovingAverage);
-  pitchVariance = calcInitialVariance(pitchValues, pitchMovingAverage);
-  headingVariance = calcInitialVariance(headingValues, headingMovingAverage);
-  Serial.println(rollVariance);
-  Serial.println(pitchVariance);
-  Serial.println(headingVariance);
-  dataFile = SD.open("DATA01.txt", FILE_WRITE);
-  if (dataFile) {
-    dataFile.print("Initial roll variance: " );
-    dataFile.println(rollVariance);
-    dataFile.print("Initial pitch variance: ");
-    dataFile.println(pitchVariance);
-    dataFile.print("Initial heading variance: ");
-    dataFile.println(headingVariance);
-  }
 }
 
 void initializeGPS() {
@@ -168,66 +124,17 @@ void setIMUReadings() {
     roll = orientation.roll;
     pitch = orientation.pitch;
     heading = orientation.heading;
-    
   }
+
+  accelX = accel_event.acceleration.x;
+  accelY = accel_event.acceleration.y;
+  accelZ = accel_event.acceleration.z;
 }
 
-void setIMUValues() {
-  valuesStart = (valuesStart + 1) % WINDOW_SIZE;
-  valuesEnd = (valuesEnd + 1) % WINDOW_SIZE;
-  rollValues[valuesEnd] = roll;
-  pitchValues[valuesEnd] = pitch;
-  headingValues[valuesEnd] = heading;
-}
 
-float calcInitialAverage(float values[]) {
-  float sum = 0;
-  for (int i = 0; i < WINDOW_SIZE; i++) {
-    sum = sum + values[i];
-  }
-  return sum / (float)WINDOW_SIZE;
-}
-
-float calcInitialVariance(float values[], float mean) {
-  float squareSum = 0;
-  for (int i = 0; i < WINDOW_SIZE; i++) {
-    squareSum = squareSum + (values[i] * values[i]);
-  }
-  return squareSum / WINDOW_SIZE - mean * mean;
-}
-
-void calcMovingAverage() {
-  rollMovingAverage = rollMovingAverage - (rollValues[valuesEnd] / WINDOW_SIZE) + (roll / WINDOW_SIZE);
-  pitchMovingAverage = pitchMovingAverage - (pitchValues[valuesEnd] / WINDOW_SIZE) + (pitch / WINDOW_SIZE);
-  headingMovingAverage = headingMovingAverage - (headingValues[valuesEnd] / WINDOW_SIZE) + (heading / WINDOW_SIZE);
-}
-
-void calcMovingVariance() {
-  //subtract the old datapoint and add the old average
-  rollVariance = rollVariance - (rollValues[valuesEnd]*rollValues[valuesEnd]) / WINDOW_SIZE + rollMovingAverage*rollMovingAverage;
-  pitchVariance = pitchVariance - (pitchValues[valuesEnd]*pitchValues[valuesEnd]) / WINDOW_SIZE + pitchMovingAverage*pitchMovingAverage;
-  headingVariance = headingVariance - (headingValues[valuesEnd]*headingValues[valuesEnd]) / WINDOW_SIZE + headingMovingAverage*headingMovingAverage;
-
-  //calculate the new averages
-  calcMovingAverage();
-
-  //add the new datapoint and substract the new average
-  rollVariance = rollVariance + (roll*roll) / WINDOW_SIZE - rollMovingAverage*rollMovingAverage;
-  pitchVariance = pitchVariance + (pitch*pitch) / WINDOW_SIZE - pitchMovingAverage*pitchMovingAverage;
-  headingVariance = headingVariance + (heading*heading) / WINDOW_SIZE - headingMovingAverage*headingMovingAverage;
-}
-
-void performIMUOperations() {
-  setIMUReadings();
-  calcMovingVariance();
-  setIMUValues();
-}
 
 bool isDiscStopped() {
-  //float rollVariance = calcVariance(rollValues, WINDOW_SIZE);
-  //float pitchVariance = calcVariance(pitchValues, WINDOW_SIZE);
-  //float headingVariance = calcVariance(headingValues, WINDOW_SIZE);
-  if (rollVariance < ROLL_THRESHOLD && pitchVariance < PITCH_THRESHOLD && headingVariance < HEADING_THRESHOLD)
+  if (accelX < ACCEL_THRESHOLD && accelY < ACCEL_THRESHOLD)
     return true;
   else 
     return false;
@@ -326,6 +233,6 @@ void loop()
     timer = millis(); // reset the timer
     transmitOrWriteGPSData();
   }
-  performIMUOperations();
+  setIMUReadings();
   transmitOrWriteIMUData();
 }
