@@ -27,9 +27,9 @@ float headingValues[WINDOW_SIZE];
 int valuesStart = 0, valuesEnd = 0;
 
 //threshold for roll, pitch, and heading variance
-float ROLL_THRESHOLD = 0;
-float PITCH_THRESHOLD = 0;
-float HEADING_THRESHOLD = 0;
+float ROLL_THRESHOLD = 0.2;
+float PITCH_THRESHOLD = 0.2;
+float HEADING_THRESHOLD = 0.2;
 
 //variables used for computing the moving average and variance
 float rollMovingAverage, rollVariance;
@@ -274,7 +274,7 @@ void transmitOrWriteGPSData() {
       dataFile.close();
       Serial.println("Wrote GPS data successfully");
     } else {
-      root.prettyPrintTo(Serial);
+      Serial.println("Failed to write GPS data.");
     }
   }
 }
@@ -300,7 +300,7 @@ void transmitOrWriteIMUData() {
       dataFile.close();
       Serial.println("Wrote IMU data successfully.");
     } else {
-      root.prettyPrintTo(Serial);
+      Serial.println("Failed to write IMU data.");
     }
   }
 }
@@ -324,50 +324,8 @@ void loop()
   // transmit GPS data every second
   if (millis() - timer > 1000) { 
     timer = millis(); // reset the timer
-    //transmitOrWriteGPSData();
+    transmitOrWriteGPSData();
   }
   performIMUOperations();
-  Serial.print("Roll: ");
-  Serial.print(roll, 4);
-  Serial.print(" Pitch: ");
-  Serial.print(pitch, 4);
-  Serial.print(" Heading: ");
-  Serial.println(heading, 4);
-  Serial.print("Roll variance: ");
-  Serial.print(rollVariance, 4);
-  Serial.print(" Pitch Variance: ");
-  Serial.print(pitchVariance, 4);
-  Serial.print(" Heading Variance: ");
-  Serial.println(headingVariance, 4);
-  Serial.print("{");
-  for (int i = 0; i < WINDOW_SIZE; i++) {
-    Serial.print(pitchValues[i]);
-    Serial.print(", ");
-  }
-  Serial.println("}");
-  dataFile = SD.open("DATA01.txt", FILE_WRITE);
-  if (dataFile) {
-//    dataFile.print("Roll: ");
-//    dataFile.print(roll, 4);
-//    dataFile.print(" Pitch: ");
-//    dataFile.print(pitch, 4);
-//    dataFile.print(" Heading: ");
-//    dataFile.println(heading, 4);
-//    dataFile.print("Roll variance: ");
-//    dataFile.print(rollVariance, 4);
-//    dataFile.print(" Pitch Variance: ");
-//    dataFile.print(pitchVariance, 4);
-//    dataFile.print(" Heading Variance: ");
-//    dataFile.println(headingVariance, 4);
-    dataFile.print("[");
-    for (int i = 0; i < WINDOW_SIZE; i++) {
-      dataFile.print(pitchValues[i]);
-      dataFile.print(", ");
-    }
-    dataFile.print("]");
-    dataFile.close();
-  }
-  Serial.println("}");
-  delay(1000);
-  //transmitOrWriteIMUData();
+  transmitOrWriteIMUData();
 }
