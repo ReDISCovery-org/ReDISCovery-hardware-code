@@ -238,9 +238,9 @@ String sendCommand(String command, const int timeout, boolean debug)
 
 void checkMessages() {
   
-  if(esp8266.available() && isDiscStopped()) // check if the esp is sending a message 
+  if(esp8266.available()) // check if the esp is sending a message 
   {
-    Serial.println("Sending data to phone");
+    Serial.println("Sending data to phone.");
     if(esp8266.find("+IPD,"))
     {
      delay(1000); // wait for the serial buffer to fill up (read all the serial data)
