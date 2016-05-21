@@ -252,6 +252,8 @@ void checkMessages() {
         dataFile.close();
         Serial.println("Read following data successfully from cache: ");
         Serial.println(content);
+     } else {
+        Serial.println("Failed to read data from cache");
      }
      
      sendHTTPResponse(connectionId, content);
