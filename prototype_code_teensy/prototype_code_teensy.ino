@@ -9,6 +9,7 @@
 #include <SPI.h>
 #include <SD.h>
 #include <ArduinoJson.h>
+#include <SoftwareSerial.h>
 
 /* Assign a unique ID to the 10 DoF sensors */
 Adafruit_10DOF                dof   = Adafruit_10DOF();
@@ -30,7 +31,7 @@ HardwareSerial gpsSerial = Serial1;
 Adafruit_GPS GPS(&gpsSerial);
 
 /*Serial interface for the ESP8266*/
-HardwareSerial espSerial = Serial2;
+SoftwareSerial esp8266(7, 8);
 
 /* Set GPSECHO to 'false' to turn off echoing the GPS data to the Serial console
  Set to 'true' if you want to debug and listen to the raw GPS sentences.*/
@@ -108,7 +109,7 @@ void initializeSDCard() {
 }
 
 void initializeESP() {
-//  espSerial.begin(9600);
+//  espSerial.begin(115200);
 //  sendCommand("AT+RST\r\n",2000,DEBUG); // reset module
 //  sendCommand("AT+CWMODE=1\r\n",1000,DEBUG); // configure as access point
 //  sendCommand("AT+CWJAP=\"mySSID\",\"myPassword\"\r\n",3000,DEBUG);
@@ -116,6 +117,118 @@ void initializeESP() {
 //  sendCommand("AT+CIFSR\r\n",1000,DEBUG); // get ip address
 //  sendCommand("AT+CIPMUX=1\r\n",1000,DEBUG); // configure for multiple connections
 //  sendCommand("AT+CIPSERVER=1,80\r\n",1000,DEBUG); // turn on server on port 80
+}
+
+/*
+* Name: sendData
+* Description: Function used to send data to ESP8266.
+* Params: command - the data/command to send; timeout - the time to wait for a response; debug - print to Serial window?(true = yes, false = no)
+* Returns: The response from the esp8266 (if there is a reponse)
+*/
+String sendData(String command, const int timeout, boolean debug)
+{
+    String response = "";
+    
+    int dataSize = command.length();
+    char data[dataSize];
+    command.toCharArray(data,dataSize);
+           
+    esp8266.write(data,dataSize); // send the read character to the esp8266
+    if(debug)
+    {
+      Serial.println("\r\n====== HTTP Response From Arduino ======");
+      Serial.write(data,dataSize);
+      Serial.println("\r\n========================================");
+    }
+    
+    long int time = millis();
+    
+    while( (time+timeout) > millis())
+    {
+      while(esp8266.available())
+      {
+        
+        // The esp has data so display its output to the serial window 
+        char c = esp8266.read(); // read the next character.
+        response+=c;
+      }  
+    }
+    
+    if(debug)
+    {
+      Serial.print(response);
+    }
+    
+    return response;
+}
+
+/*
+* Name: sendHTTPResponse
+* Description: Function that sends HTTP 200, HTML UTF-8 response
+*/
+void sendHTTPResponse(int connectionId, String content)
+{
+     
+     // build HTTP response
+     String httpResponse;
+     String httpHeader;
+     // HTTP Header
+     httpHeader = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\n"; 
+     httpHeader += "Content-Length: ";
+     httpHeader += content.length();
+     httpHeader += "\r\n";
+     httpHeader +="Connection: close\r\n\r\n";
+     httpResponse = httpHeader + content + " "; // There is a bug in this code: the last character of "content" is not sent, I cheated by adding this extra space
+     sendCIPData(connectionId,httpResponse);
+}
+
+/*
+* Name: sendCIPDATA
+* Description: sends a CIPSEND=<connectionId>,<data> command
+*
+*/
+void sendCIPData(int connectionId, String data)
+{
+   String cipSend = "AT+CIPSEND=";
+   cipSend += connectionId;
+   cipSend += ",";
+   cipSend +=data.length();
+   cipSend +="\r\n";
+   sendCommand(cipSend,1000,DEBUG);
+   sendData(data,1000,DEBUG);
+}
+
+/*
+* Name: sendCommand
+* Description: Function used to send data to ESP8266.
+* Params: command - the data/command to send; timeout - the time to wait for a response; debug - print to Serial window?(true = yes, false = no)
+* Returns: The response from the esp8266 (if there is a reponse)
+*/
+String sendCommand(String command, const int timeout, boolean debug)
+{
+    String response = "";
+           
+    esp8266.print(command); // send the read character to the esp8266
+    
+    long int time = millis();
+    
+    while( (time+timeout) > millis())
+    {
+      while(esp8266.available())
+      {
+        
+        // The esp has data so display its output to the serial window 
+        char c = esp8266.read(); // read the next character.
+        response+=c;
+      }  
+    }
+    
+    if(debug)
+    {
+      Serial.print(response);
+    }
+    
+    return response;
 }
 
 void setIMUReadings() {
@@ -228,6 +341,8 @@ void writeDataToCache() {
     }
   }
 }
+
+
 
 uint32_t timer = millis();
 void loop()                     
