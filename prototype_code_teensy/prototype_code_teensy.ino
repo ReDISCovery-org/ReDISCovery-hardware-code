@@ -26,12 +26,14 @@ double mostRecentLongitudeReading;
 double mostRecentLatitudeReading;
 double mostRecentSpeedReading;
 
+boolean shouldWriteDataToCache;
+
 /* Assign serial interface to the GPS */
 HardwareSerial gpsSerial = Serial1;
 Adafruit_GPS GPS(&gpsSerial);
 
 /*Serial interface for the ESP8266*/
-SoftwareSerial esp8266(7, 8);
+SoftwareSerial esp8266(8, 7);
 
 /* Set GPSECHO to 'false' to turn off echoing the GPS data to the Serial console
  Set to 'true' if you want to debug and listen to the raw GPS sentences.*/
@@ -61,6 +63,8 @@ void setup()
   mostRecentLatitudeReading = 0;
   mostRecentLongitudeReading = 0;
   mostRecentSpeedReading = 0;
+
+  shouldWriteDataToCache = true;
 }
 
 void initializeIMU() {
@@ -117,6 +121,7 @@ void initializeESP() {
   sendCommand("AT+CIFSR\r\n",1000,DEBUG); // get ip address
   sendCommand("AT+CIPMUX=1\r\n",1000,DEBUG); // configure for multiple connections
   sendCommand("AT+CIPSERVER=1,80\r\n",1000,DEBUG); // turn on server on port 80
+  Serial.println("Server ready.");
 }
 
 /*
@@ -358,8 +363,14 @@ void writeIMUData() {
   }
 }
 
+void printMotionData() {
+  Serial.print("Accel X: "); Serial.print(accelX);
+  Serial.print(" Accel Y: "); Serial.print(accelY);
+  Serial.print(" Accel Z: "); Serial.println(accelZ);
+}
+
 void writeDataToCache() {
-  if (isDiscStopped()) {
+  if (isDiscStopped() && shouldWriteDataToCache) {
     StaticJsonBuffer<200> jsonBuffer;
     JsonObject& root = jsonBuffer.createObject();
     JsonArray& array = root.createNestedArray("sensor_info");
@@ -373,14 +384,15 @@ void writeDataToCache() {
       root.printTo(dataFile);
       dataFile.print("\n");
       dataFile.close();
-      //Serial.println("Wrote data successfully to cache.");
+      Serial.println("Wrote data successfully to cache.");
     } else {
-      Serial.println("Failed to write write data to cache.");
+      Serial.println("Failed to write data to cache.");
     }
+    shouldWriteDataToCache = false;
+  } else if (!isDiscStopped() && !shouldWriteDataToCache) {
+    shouldWriteDataToCache = true;
   }
 }
-
-
 
 uint32_t timer = millis();
 void loop()                     
@@ -406,5 +418,6 @@ void loop()
   setIMUReadings();
   writeIMUData();
   writeDataToCache();
+  //printMotionData();
   checkMessages();
 }
