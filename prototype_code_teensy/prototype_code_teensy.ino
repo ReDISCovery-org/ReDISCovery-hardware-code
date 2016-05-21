@@ -109,14 +109,14 @@ void initializeSDCard() {
 }
 
 void initializeESP() {
-//  espSerial.begin(115200);
-//  sendCommand("AT+RST\r\n",2000,DEBUG); // reset module
-//  sendCommand("AT+CWMODE=1\r\n",1000,DEBUG); // configure as access point
-//  sendCommand("AT+CWJAP=\"mySSID\",\"myPassword\"\r\n",3000,DEBUG);
-//  delay(10000);
-//  sendCommand("AT+CIFSR\r\n",1000,DEBUG); // get ip address
-//  sendCommand("AT+CIPMUX=1\r\n",1000,DEBUG); // configure for multiple connections
-//  sendCommand("AT+CIPSERVER=1,80\r\n",1000,DEBUG); // turn on server on port 80
+  esp8266.begin(115200);
+  sendCommand("AT+RST\r\n",2000,DEBUG); // reset module
+  sendCommand("AT+CWMODE=1\r\n",1000,DEBUG); // configure as access point
+  sendCommand("AT+CWJAP=\"ninevolz\",\"raoi911*\"\r\n",3000,DEBUG);
+  delay(10000);
+  sendCommand("AT+CIFSR\r\n",1000,DEBUG); // get ip address
+  sendCommand("AT+CIPMUX=1\r\n",1000,DEBUG); // configure for multiple connections
+  sendCommand("AT+CIPSERVER=1,80\r\n",1000,DEBUG); // turn on server on port 80
 }
 
 /*
@@ -229,6 +229,41 @@ String sendCommand(String command, const int timeout, boolean debug)
     }
     
     return response;
+}
+
+void checkMessages() {
+  
+  if(esp8266.available() && isDiscStopped()) // check if the esp is sending a message 
+  {
+    if(esp8266.find("+IPD,"))
+    {
+     delay(1000); // wait for the serial buffer to fill up (read all the serial data)
+     // get the connection id so that we can then disconnect
+     int connectionId = esp8266.read()-48; // subtract 48 because the read() function returns 
+                                           // the ASCII decimal value and 0 (the first decimal number) starts at 48
+          
+     // build string that is send back to device that is requesting pin toggle
+     String content = "";
+     dataFile = SD.open("DATA01.txt");
+     if (dataFile) {
+        while (dataFile.available()) {
+          content += dataFile.read();
+        }
+        dataFile.close();
+        Serial.println("Read following data successfully from cache: ");
+        Serial.println(content);
+     }
+     
+     sendHTTPResponse(connectionId, content);
+     
+     // make close command
+     String closeCommand = "AT+CIPCLOSE="; 
+     closeCommand+=connectionId; // append connection id
+     closeCommand+="\r\n";
+     
+     sendCommand(closeCommand,1000,DEBUG); // close connection
+    }
+  }
 }
 
 void setIMUReadings() {
