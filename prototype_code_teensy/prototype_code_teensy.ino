@@ -21,6 +21,10 @@ float roll, pitch, heading;
 float accelX, accelY, accelZ;
 float ACCEL_THRESHOLD = 1.0;
 
+double mostRecentLongitudeReading;
+double mostRecentLatitudeReading;
+double mostRecentSpeedReading;
+
 /* Assign serial interface to the GPS */
 HardwareSerial gpsSerial = Serial1;
 Adafruit_GPS GPS(&gpsSerial);
@@ -51,6 +55,11 @@ void setup()
   initializeIMU();
   initializeSDCard();
   //initializeESP();
+
+  //set most recent
+  mostRecentLatitudeReading = 0;
+  mostRecentLongitudeReading = 0;
+  mostRecentSpeedReading = 0;
 }
 
 void initializeIMU() {
@@ -131,8 +140,6 @@ void setIMUReadings() {
   accelZ = accel_event.acceleration.z;
 }
 
-
-
 bool isDiscStopped() {
   if (accelX < ACCEL_THRESHOLD && accelY < ACCEL_THRESHOLD)
     return true;
@@ -140,12 +147,7 @@ bool isDiscStopped() {
     return false;
 }
 
-boolean canTransmitData()
-{
-  return false;
-}
-
-void transmitOrWriteGPSData() {
+void writeGPSData() {
   //build the JSON packet
   StaticJsonBuffer<200> jsonBuffer;
   JsonObject& root = jsonBuffer.createObject();
@@ -162,6 +164,11 @@ void transmitOrWriteGPSData() {
     coords.add(double_with_n_digits(GPS.longitudeDegrees, 6));
     root["speed"] = GPS.speed;
     root["altitude"] = GPS.altitude;
+
+    //set most recent
+    mostRecentLatitudeReading = double_with_n_digits(GPS.latitudeDegrees, 6);
+    mostRecentLongitudeReading = double_with_n_digits(GPS.longitudeDegrees, 6);
+    mostRecentSpeedReading = GPS.speed * 0.51444;
   } else {
     JsonArray& coords = root.createNestedArray("coords");
     coords.add(0);
@@ -169,24 +176,18 @@ void transmitOrWriteGPSData() {
     root["speed"] = 0;
     root["altitude"] = 0;
   }
-
-  //transmit if in range or write to SD card
-  if (canTransmitData()) {
-    
+  dataFile = SD.open("DATA00.txt", FILE_WRITE);
+  if (dataFile) {
+    root.printTo(dataFile);
+    dataFile.print("\n");
+    dataFile.close();
+    Serial.println("Wrote GPS data successfully to store.");
   } else {
-    dataFile = SD.open("DATA00.txt", FILE_WRITE);
-    if (dataFile) {
-      root.printTo(dataFile);
-      dataFile.print("\n");
-      dataFile.close();
-      Serial.println("Wrote GPS data successfully");
-    } else {
-      Serial.println("Failed to write GPS data.");
-    }
+    Serial.println("Failed to write GPS data to store.");
   }
 }
 
-void transmitOrWriteIMUData() {
+void writeIMUData() {
   //build the JSON packet
   StaticJsonBuffer<200> jsonBuffer;
   JsonObject& root = jsonBuffer.createObject();
@@ -195,19 +196,35 @@ void transmitOrWriteIMUData() {
   root["pitch"] = pitch;
   root["roll"] = roll;
   root["heading"] = heading;
-
-  //transmit if in range or write to SD card
-  if (canTransmitData()) {
-    root.printTo(espSerial);  
+  dataFile = SD.open("DATA00.txt", FILE_WRITE);
+  if (dataFile) {
+    root.printTo(dataFile);
+    dataFile.print("\n");
+    dataFile.close();
+    Serial.println("Wrote IMU data successfully to store.");
   } else {
-    dataFile = SD.open("DATA00.txt", FILE_WRITE);
+    Serial.println("Failed to write IMU data to store.");
+  }
+}
+
+void writeDataToCache() {
+  if (isDiscStopped()) {
+    StaticJsonBuffer<200> jsonBuffer;
+    JsonObject& root = jsonBuffer.createObject();
+    JsonArray& array = root.createNestedArray("sensor_info");
+    JsonObject& sensorInfo = array.createNestedObject();
+    sensorInfo["latitude"] = mostRecentLatitudeReading;
+    sensorInfo["longitude"] = mostRecentLongitudeReading;
+    sensorInfo["linear_velocity"] = mostRecentSpeedReading;
+    root["success"] = 1;
+    dataFile = SD.open("DATA01.txt", O_WRITE | O_CREAT | O_TRUNC);
     if (dataFile) {
       root.printTo(dataFile);
       dataFile.print("\n");
       dataFile.close();
-      Serial.println("Wrote IMU data successfully.");
+      Serial.println("Wrote data successfully to cache.");
     } else {
-      Serial.println("Failed to write IMU data.");
+      Serial.println("Failed to write write data to cache.");
     }
   }
 }
@@ -231,8 +248,9 @@ void loop()
   // transmit GPS data every second
   if (millis() - timer > 1000) { 
     timer = millis(); // reset the timer
-    transmitOrWriteGPSData();
+    writeGPSData();
   }
   setIMUReadings();
-  transmitOrWriteIMUData();
+  writeIMUData();
+  writeDataToCache();
 }
